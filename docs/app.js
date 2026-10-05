@@ -271,3 +271,112 @@ if(phaseImageInput){
     ["dragleave","drop"].forEach(ev=>composer.addEventListener(ev,()=>composer.classList.remove("drag-active")));
   }
 })();
+
+/* Interaction-rich forensic controls */
+(function(){
+  const liveSignals=document.getElementById("liveSignals");
+  const caseButtons=[...document.querySelectorAll(".caseChip")];
+
+  const examples={
+    fine:"You: you still wanna go tomorrow?\nThem: idk\nYou: everything okay?\nThem: fine.",
+    sure:"You: should I just go without you?\nThem: sure.",
+    okayyy:"You: I got the tickets btw\nThem: okayyy\nYou: wait are you actually excited?\nThem: yeahhh"
+  };
+
+  function liveScan(){
+    if(!liveSignals)return;
+    const lines=rows().map(parse);
+    const chips=[];
+    const last=lines.at(-1)?.text||"";
+    const prev=lines.at(-2)?.text||"";
+
+    if(lines.length>=2)chips.push(["context "+lines.length+" msgs","hot"]);
+    if(last&&last.split(/\s+/).filter(Boolean).length<=3)chips.push(["short reply","warn"]);
+    if(last&&/\.$/.test(last))chips.push(["terminal period","hot"]);
+    if(last&&deflections.has(last.toLowerCase()))chips.push(["possible deflection","warn"]);
+    if(prev&&/[?？]\s*$/.test(prev)&&last)chips.push(["question → response","hot"]);
+
+    liveSignals.innerHTML='<span class="liveLabel">live scan</span>'+
+      (chips.length
+        ? chips.map(x=>'<span class="signalChip '+x[1]+'">'+x[0]+'</span>').join("")
+        : '<span class="signalChip dormant">waiting for evidence</span>');
+  }
+
+  input.addEventListener("input",liveScan);
+  liveScan();
+
+  caseButtons.forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      input.value=examples[btn.dataset.case]||"";
+      updateCount();
+      liveScan();
+      input.focus();
+      input.setSelectionRange(input.value.length,input.value.length);
+    });
+  });
+
+  analyzeBtn.addEventListener("click",()=>{
+    if(!input.value.trim())return;
+    document.body.classList.add("is-analyzing");
+    const old=analyzeBtn.textContent;
+    analyzeBtn.textContent="scanning…";
+    setTimeout(()=>{
+      document.body.classList.remove("is-analyzing");
+      analyzeBtn.textContent=old;
+      const report=feed.querySelector(".report");
+      if(report){
+        report.classList.add("staggered");
+        [...report.querySelectorAll(".hyp")].forEach((el,i)=>{
+          el.setAttribute("tabindex","0");
+          el.setAttribute("role","button");
+          el.dataset.index=String(i);
+        });
+      }
+    },620);
+  });
+
+  function openProbe(hyp){
+    const report=hyp.closest(".report");
+    if(!report)return;
+    report.querySelectorAll(".hyp").forEach(x=>x.classList.remove("active"));
+    hyp.classList.add("active");
+
+    let probe=report.querySelector(".interactiveProbe");
+    if(!probe){
+      probe=document.createElement("section");
+      probe.className="interactiveProbe";
+      const grid=report.querySelector(".grid");
+      grid?.insertAdjacentElement("afterend",probe);
+    }
+
+    const label=hyp.querySelector(".hypTop span")?.textContent?.trim()||"selected reading";
+    const likelihood=hyp.querySelector(".hypTop b")?.textContent?.trim()||"";
+    const note=hyp.querySelector(".note")?.textContent?.trim()||"";
+    const signals=[...report.querySelectorAll(".signal b")].map(x=>x.textContent.trim());
+    const supporting=signals.length?signals.slice(0,2).join(" + "):"No strong behavioral evidence recovered.";
+    const weakening=label.includes("genuinely")
+      ?"Abruptness and deflection can weaken the literal reading."
+      :label.includes("unknowable")
+        ?"Multiple observable shifts reduce the pure-unknown explanation."
+        :"Short replies can also come from fatigue, distraction, or ordinary texting habits.";
+
+    probe.innerHTML=
+      '<div class="probeTop"><span>interrogate hypothesis</span><b>'+label+' · '+likelihood+'</b></div>'+
+      '<div class="probeGrid">'+
+        '<div class="probeBox for"><small>why this reading?</small><p>'+supporting+'. '+note+'</p></div>'+
+        '<div class="probeBox against"><small>what weakens it?</small><p>'+weakening+'</p></div>'+
+      '</div>';
+  }
+
+  feed.addEventListener("click",e=>{
+    const hyp=e.target.closest(".hyp");
+    if(hyp)openProbe(hyp);
+  });
+
+  feed.addEventListener("keydown",e=>{
+    if((e.key==="Enter"||e.key===" ")&&e.target.classList.contains("hyp")){
+      e.preventDefault();
+      openProbe(e.target);
+    }
+  });
+})();
