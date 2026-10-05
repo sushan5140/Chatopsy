@@ -147,3 +147,40 @@ textarea::placeholder{color:#555b55}
 .baselineExtra .baselineSignal strong{color:#dfe3dd}
 .baselineExtra .baselineMuted{color:#6e746e;font-size:10px;line-height:1.5}
 @media(max-width:620px){.phaseTools{align-items:stretch;flex-direction:column}.personBox{justify-content:space-between}.personBox input{width:70%}}
+
+/* Full-screen shell */
+.stage{
+  min-height:100vh;
+  width:100vw;
+  display:block;
+  padding:0;
+}
+.window{
+  width:100vw;
+  height:100vh;
+  min-height:100vh;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  background:rgba(18,20,18,.98);
+}
+.topbar{
+  padding-left:28px;
+  padding-right:28px;
+}
+.feed{
+  padding-left:min(8vw,90px);
+  padding-right:min(8vw,90px);
+}
+.composer{
+  width:min(1100px,92vw);
+  margin-bottom:18px;
+}
+@media(max-width:900px){
+  .window{width:100vw;height:100vh}
+  .composer{width:94vw}
+}
+@media(max-width:620px){
+  .stage{padding:0}
+  .window{width:100vw;height:100vh;border-radius:0}
+}
