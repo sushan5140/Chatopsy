@@ -4,25 +4,78 @@
 
 Chatopsy examines a chat as a set of competing interpretations rather than forcing one confident answer.
 
-## What V0 does
+## Current lab state
+
+The production branch still contains the transparent deterministic baseline and the GitHub Pages demo.
+
+The unreleased branch `lab/phase-4-5` adds the remaining research phases without deploying them.
+
+### Phase 1 — deterministic conversational forensics
 
 - paste a conversation
 - detect simple conversational changes and deflections
 - generate competing interpretations whose relative likelihoods sum to 100
-- show evidence **for and against** each leading interpretation
+- show evidence **for and against**
 - expose missing context and uncertainty
 - suggest a deliberately low-risk next move
-- keep the product voice human
 
-No login. No database. No model key required.
+### Phase 2 — screenshot reconstruction
 
-## Why the first engine is deterministic
+Implemented in the static demo with in-browser OCR. The user can edit reconstructed text before analysis.
 
-V0 intentionally starts with a transparent rules-based baseline in `lib/chatopsy.ts`.
+### Phase 3 — opt-in personal baseline
 
-That lets us test the product and reasoning contract before an LLM is allowed into the loop. Later model-backed analysis should have to beat this baseline on usefulness without becoming more confident or more invasive.
+Implemented locally in the browser. Chatopsy can compare a new reply against that person's own stored message-length and punctuation habits instead of assuming one universal texting style.
 
-The percentages in V0 are **relative likelihood scores**, not calibrated psychological probabilities.
+### Phase 4 — model analyst + analyzer disagreement
+
+The lab branch adds an optional model analyst behind the same `ChatopsyReport` contract.
+
+Modes accepted by `POST /api/analyze`:
+
+- `baseline` — transparent deterministic engine only
+- `model` — model analyst, with safe baseline fallback
+- `hybrid` — averages matching hypothesis weights and caps confidence at the more conservative analyzer
+
+Model analysis uses Vercel AI Gateway's OpenAI-compatible Chat Completions endpoint through native `fetch`, so no provider SDK is required.
+
+Required environment variables:
+
+```bash
+AI_GATEWAY_API_KEY=...
+CHATOPSY_MODEL=creator/model-id
+```
+
+The model ID is intentionally environment-configured instead of hard-coded so the lab can change models without changing the reasoning contract.
+
+`POST /api/compare` returns:
+
+- deterministic report
+- model report
+- top-hypothesis agreement
+- leading-weight delta
+- confidence agreement
+- evidence-title overlap
+- disagreement flags
+
+The point is not to decide which detective is "right." It is to make disagreement visible.
+
+### Phase 5 — validation before calling scores probabilities
+
+The lab branch includes:
+
+- behavior-focused evaluation fixtures in `lib/evaluation-fixtures.ts`
+- `lib/evaluation.ts` for uncertainty and observable-evidence checks
+- `GET /api/evaluate` for the deterministic fixture suite
+- `lib/calibration.ts` for expected calibration error and usefulness summaries once real outcome feedback exists
+
+The fixtures intentionally do **not** label hidden emotions as ground truth. They test product behavior such as:
+
+- isolated messages should remain low confidence
+- direct answers should not be mistaken for withdrawal
+- uncertainty must stay visible
+- likelihood weights must sum to 100
+- generated explanations must avoid overconfident language
 
 ## Principle
 
@@ -35,17 +88,21 @@ Chatopsy should never claim to know another person's private mental state from a
 ```text
 conversation
     ↓
-/api/analyze
+deterministic signal extraction
     ↓
-signal extraction
+optional model analyst
     ↓
-competing hypotheses
+baseline ↔ model comparison
+    ↓
+conservative hybrid report
     ↓
 evidence for / against
     ↓
 uncertainty + missing context
     ↓
 low-risk response suggestion
+    ↓
+evaluation + later calibration from real feedback
 ```
 
 ## Run locally
@@ -58,10 +115,8 @@ npm run dev
 
 Then open `http://localhost:3000`.
 
-## Next experiments
+## Important score semantics
 
-1. Add a model-backed analyzer behind the same `ChatopsyReport` contract
-2. Compare model output against the deterministic baseline
-3. Add screenshot conversation reconstruction
-4. Add opt-in personal communication baselines
-5. Validate whether displayed likelihoods are actually useful before calling them probabilities
+Displayed percentages are **relative hypothesis weights**, not calibrated psychological probabilities.
+
+Only after enough real, consented outcome labels exist should calibration metrics be interpreted. Until then, the interface should continue to describe them as weights or likelihoods rather than certainty.
