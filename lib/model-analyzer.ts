@@ -5,6 +5,12 @@ type GatewayResponse = {
 };
 
 const WEIGHTS = new Set<Evidence["weight"]>(["weak", "moderate", "strong"]);
+const CANONICAL_LABELS = [
+  "mildly upset / withdrawing",
+  "genuinely fine",
+  "wants you to notice something",
+  "unknowable from this chat",
+] as const;
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -46,7 +52,8 @@ function parseJsonObject(text: string) {
 
 function cleanHypotheses(value: unknown): Hypothesis[] {
   if (!Array.isArray(value)) return [];
-  const parsed = value.slice(0, 6).flatMap((item) => {
+
+  const parsed = value.flatMap((item) => {
     if (!item || typeof item !== "object") return [];
     const row = item as Record<string, unknown>;
     const label = typeof row.label === "string" ? row.label.trim() : "";
@@ -60,28 +67,23 @@ function cleanHypotheses(value: unknown): Hypothesis[] {
     }];
   });
 
-  if (!parsed.some((hypothesis) => /unknown|uncertain|insufficient/i.test(hypothesis.label))) {
-    parsed.push({
-      label: "unknowable from this chat",
-      likelihood: 18,
-      note: "Chat text alone may not contain enough information to distinguish intent.",
-      for: [{
-        title: "Intent is not directly observable",
-        detail: "The same wording can be produced by many different real-world situations.",
-        weight: "strong",
-      }],
+  const canonical = CANONICAL_LABELS.map((label) => {
+    const match = parsed.find((item) => item.label.toLowerCase() === label.toLowerCase());
+    return match ?? {
+      label,
+      likelihood: label === "unknowable from this chat" ? 25 : 25,
+      note: "Model omitted this required competing hypothesis, so Chatopsy restored it.",
+      for: [],
       against: [],
-    });
-  }
+    };
+  });
 
-  const limited = parsed.slice(0, 4);
-  const normalized = normalizeLikelihoods(limited.map((item) => item.likelihood));
-  return limited.map((item, index) => ({ ...item, likelihood: normalized[index] }));
+  const normalized = normalizeLikelihoods(canonical.map((item) => item.likelihood));
+  return canonical.map((item, index) => ({ ...item, likelihood: normalized[index] }));
 }
 
 function sanitizeModelReport(raw: Record<string, unknown>, baseline: ChatopsyReport): ChatopsyReport {
   const hypotheses = cleanHypotheses(raw.hypotheses);
-  if (hypotheses.length < 2) throw new Error("Model returned too few competing hypotheses.");
 
   const confidence =
     raw.confidence === "HIGH" || raw.confidence === "MEDIUM" || raw.confidence === "LOW"
@@ -134,7 +136,7 @@ export async function analyzeConversationWithModel(
     "Generate competing explanations, not one diagnosis.",
     "Evidence must refer only to observable wording or conversation structure in the supplied chat.",
     "Every hypothesis needs evidence FOR and AGAINST it.",
-    "Keep an unknowable/insufficient-context hypothesis alive.",
+    "Use exactly these four hypothesis labels: " + CANONICAL_LABELS.join(" | "),
     "Likelihood values are relative UI weights, not psychological probabilities.",
     "Prefer LOW or MEDIUM confidence unless the observable pattern is unusually clear.",
     "Suggested replies must be low-pressure and non-accusatory.",
@@ -149,7 +151,7 @@ export async function analyzeConversationWithModel(
       explanation: "string",
       confidence: "LOW | MEDIUM | HIGH",
       hypotheses: [{
-        label: "string",
+        label: "one of the four required canonical labels",
         likelihood: "number 0-100",
         note: "string",
         for: [{ title: "string", detail: "string", weight: "weak | moderate | strong" }],
