@@ -134,3 +134,101 @@ input.addEventListener("keydown",e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==="Enter")analyze();
 });
 updateCount();
+
+const phaseImageInput=document.getElementById("imageInput");
+const phaseProfileInput=document.getElementById("profileInput");
+const phaseOcrStatus=document.getElementById("ocrStatus");
+const PHASE_STORE="chatopsy.person-baselines.v1";
+
+function phaseStore(){
+  try{return JSON.parse(localStorage.getItem(PHASE_STORE)||"{}")}catch{return {}}
+}
+function phaseKey(){return (phaseProfileInput?.value||"").trim().toLowerCase()}
+function phaseFeat(text){
+  const words=text.trim().split(/\s+/).filter(Boolean).length;
+  return {words,short:words<=3,period:/\.$/.test(text.trim())};
+}
+function phaseOtherMessages(){
+  const parsed=rows().map(parse);
+  const tagged=parsed.filter(m=>m.speaker.toLowerCase()!=="you"&&m.speaker!=="Unknown");
+  return tagged.length?tagged:parsed.filter((_,i)=>i%2===1);
+}
+function phaseBaseline(){
+  const key=phaseKey();
+  if(!key)return null;
+  const arr=phaseStore()[key]||[];
+  if(!arr.length)return null;
+  return {
+    count:arr.length,
+    avgWords:arr.reduce((a,b)=>a+b.words,0)/arr.length,
+    shortRate:arr.filter(x=>x.short).length/arr.length,
+    periodRate:arr.filter(x=>x.period).length/arr.length
+  };
+}
+function phaseLearn(){
+  const key=phaseKey();
+  if(!key)return;
+  const fresh=phaseOtherMessages().map(m=>phaseFeat(m.text));
+  if(!fresh.length)return;
+  const store=phaseStore();
+  store[key]=[...(store[key]||[]),...fresh].slice(-300);
+  localStorage.setItem(PHASE_STORE,JSON.stringify(store));
+}
+function phaseBaselineCard(){
+  const key=phaseKey();
+  if(!key)return "";
+  const b=phaseBaseline();
+  if(!b)return '<section class="baselineExtra"><div class="baselineTop"><span>personal baseline</span><b>learning</b></div><div class="baselineMuted">First sample for this person. Run a few chats and Chatopsy will compare new replies against their own normal style.</div></section>';
+
+  const last=parse(rows().at(-1)||"").text;
+  const f=phaseFeat(last);
+  const findings=[];
+  if(b.avgWords>=4&&f.words<=Math.max(2,b.avgWords*.45))findings.push('<strong>shorter than usual</strong> · '+f.words+' words now vs '+b.avgWords.toFixed(1)+' average');
+  if(f.period&&b.periodRate<.2)findings.push('<strong>unusual period</strong> · only '+Math.round(b.periodRate*100)+'% of stored messages end with one');
+  if(f.short&&b.shortRate<.25)findings.push('<strong>rare short reply</strong> · short replies are only '+Math.round(b.shortRate*100)+'% of their baseline');
+  if(!findings.length)findings.push('<strong>nothing unusual</strong> · this reply sits fairly close to the stored baseline');
+
+  return '<section class="baselineExtra"><div class="baselineTop"><span>personal baseline</span><b>'+b.count+' msgs</b></div>'+findings.map(x=>'<div class="baselineSignal">'+x+'</div>').join("")+'<div class="baselineMuted">Stored only in this browser. Deviation is not proof of mood or intent.</div></section>';
+}
+function phaseInjectBaseline(){
+  const report=feed.querySelector(".report");
+  if(!report)return;
+  report.querySelector(".baselineExtra")?.remove();
+  const warning=report.querySelector(".warning");
+  if(warning)warning.insertAdjacentHTML("beforebegin",phaseBaselineCard());
+  phaseLearn();
+}
+
+analyzeBtn.addEventListener("click",()=>setTimeout(phaseInjectBaseline,0));
+
+if(phaseImageInput){
+  phaseImageInput.addEventListener("change",async e=>{
+    const files=[...e.target.files];
+    if(!files.length)return;
+    phaseOcrStatus.hidden=false;
+    if(!window.Tesseract){
+      phaseOcrStatus.textContent="OCR failed to load — paste the chat instead.";
+      return;
+    }
+    const chunks=[];
+    try{
+      for(let i=0;i<files.length;i++){
+        phaseOcrStatus.textContent="reading screenshot "+(i+1)+"/"+files.length+" · starting…";
+        const result=await Tesseract.recognize(files[i],"eng",{logger:m=>{
+          if(m.status==="recognizing text")phaseOcrStatus.textContent="reading screenshot "+(i+1)+"/"+files.length+" · "+Math.round((m.progress||0)*100)+"%";
+        }});
+        const raw=(result?.data?.text||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean).join("\n");
+        if(raw)chunks.push(raw);
+      }
+      if(chunks.length){
+        input.value=[input.value.trim(),chunks.join("\n")].filter(Boolean).join("\n");
+        phaseOcrStatus.textContent="text recovered — fix You:/Them: labels if needed, then run autopsy.";
+        updateCount();
+      }else phaseOcrStatus.textContent="couldn't recover readable text from that screenshot.";
+    }catch{
+      phaseOcrStatus.textContent="OCR stumbled — try a clearer crop or paste the chat.";
+    }finally{
+      phaseImageInput.value="";
+    }
+  });
+}
