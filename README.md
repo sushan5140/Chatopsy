@@ -2,42 +2,66 @@
 
 **Conversational forensics, without pretending we can read minds.**
 
-Chatopsy is an experimental interface for examining a conversation as a set of competing interpretations rather than forcing one confident answer.
+Chatopsy examines a chat as a set of competing interpretations rather than forcing one confident answer.
 
-## V0
-
-The first version deliberately stays small:
+## What V0 does
 
 - paste a conversation
-- surface possible interpretations
-- show evidence for the strongest reading
-- expose uncertainty and missing context
-- suggest a low-risk next move
+- detect simple conversational changes and deflections
+- generate competing interpretations whose relative likelihoods sum to 100
+- show evidence **for and against** each leading interpretation
+- expose missing context and uncertainty
+- suggest a deliberately low-risk next move
 - keep the product voice human
 
-The current UI ships with a static demo analysis so the interaction and visual language can be tested before wiring in a model.
+No login. No database. No model key required.
+
+## Why the first engine is deterministic
+
+V0 intentionally starts with a transparent rules-based baseline in `lib/chatopsy.ts`.
+
+That lets us test the product and reasoning contract before an LLM is allowed into the loop. Later model-backed analysis should have to beat this baseline on usefulness without becoming more confident or more invasive.
+
+The percentages in V0 are **relative likelihood scores**, not calibrated psychological probabilities.
 
 ## Principle
 
-> Something changed.
+> Detect the change. Explain the evidence. Keep the uncertainty.
 
-Chatopsy should detect changes and explain evidence. It should **not** claim to know another person's private mental state.
+Chatopsy should never claim to know another person's private mental state from a chat.
 
-Percentages in V0 are displayed as relative likelihoods for the demo and are not calibrated psychological probabilities.
+## Architecture
+
+```text
+conversation
+    ↓
+/api/analyze
+    ↓
+signal extraction
+    ↓
+competing hypotheses
+    ↓
+evidence for / against
+    ↓
+uncertainty + missing context
+    ↓
+low-risk response suggestion
+```
 
 ## Run locally
 
 ```bash
 npm install
+npm run typecheck
 npm run dev
 ```
 
-Then open http://localhost:3000.
+Then open `http://localhost:3000`.
 
-## Next
+## Next experiments
 
-1. Structured analysis schema
-2. Server-side inference route
-3. Evidence-for / evidence-against reasoning
-4. Screenshot conversation reconstruction
-5. Personal communication baselines (opt-in)
+1. Add a model-backed analyzer behind the same `ChatopsyReport` contract
+2. Compare model output against the deterministic baseline
+3. Add screenshot conversation reconstruction
+4. Add opt-in personal communication baselines
+5. Validate whether displayed likelihoods are actually useful before calling them probabilities
