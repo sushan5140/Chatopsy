@@ -232,3 +232,42 @@ if(phaseImageInput){
     }
   });
 }
+
+/* 2026 interaction layer */
+(function(){
+  const coarse=window.matchMedia("(pointer: coarse)").matches;
+  const reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  if(!coarse&&!reduced){
+    let tx=50,ty=25,cx=50,cy=25,raf=0;
+
+    const animate=()=>{
+      cx+=(tx-cx)*.12;
+      cy+=(ty-cy)*.12;
+      document.documentElement.style.setProperty("--mx",cx+"%");
+      document.documentElement.style.setProperty("--my",cy+"%");
+      if(Math.abs(tx-cx)>.05||Math.abs(ty-cy)>.05)raf=requestAnimationFrame(animate);
+      else raf=0;
+    };
+
+    window.addEventListener("pointermove",e=>{
+      tx=e.clientX/window.innerWidth*100;
+      ty=e.clientY/window.innerHeight*100;
+      if(!raf)raf=requestAnimationFrame(animate);
+    },{passive:true});
+
+    document.addEventListener("pointermove",e=>{
+      const card=e.target.closest(".card,.verdict,.reply");
+      if(!card)return;
+      const r=card.getBoundingClientRect();
+      card.style.setProperty("--hx",((e.clientX-r.left)/r.width*100)+"%");
+      card.style.setProperty("--hy",((e.clientY-r.top)/r.height*100)+"%");
+    },{passive:true});
+  }
+
+  const composer=document.querySelector(".composer");
+  if(composer){
+    composer.addEventListener("dragenter",()=>composer.classList.add("drag-active"));
+    ["dragleave","drop"].forEach(ev=>composer.addEventListener(ev,()=>composer.classList.remove("drag-active")));
+  }
+})();
