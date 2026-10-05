@@ -31,7 +31,7 @@
         </div>
 
         <div class="composer">
-          <textarea id="chatInput" rows="4" spellcheck="false" placeholder="You: you still wanna go tomorrow?
+          <div class="phaseTools"><label class="attachBtn"><input id="imageInput" type="file" accept="image/*" multiple hidden>＋ screenshot</label><label class="personBox">person <input id="profileInput" maxlength="40" placeholder="optional"></label></div><div id="ocrStatus" class="ocrStatus" hidden></div><textarea id="chatInput" rows="4" spellcheck="false" placeholder="You: you still wanna go tomorrow?
 Her: idk
 You: everything okay?
 Her: fine."></textarea>
@@ -45,6 +45,7 @@ Her: fine."></textarea>
     </section>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
